@@ -1,4 +1,4 @@
-# ClipPin
+# <img src="./assets/clippin-logo-flat.png" alt="ClipPin logo" width="36" /> ClipPin
 
 [English](./README.md) | [**简体中文**](./README.zh-CN.md)
 
@@ -75,10 +75,6 @@ swift build
 ./scripts/build_release_app.sh 1.0.0
 ```
 
-发布流程模板：
-
-- 见 `RELEASE.md`
-
 运行：
 
 ```bash
@@ -100,7 +96,7 @@ swift run
 - MVP 阶段不支持应用重启后自动恢复 Pin 窗口。
 - 截图快捷键调用系统命令 `screencapture -i -c`（交互式区域截图到剪贴板）。
 - 开机启动通过 `~/Library/LaunchAgents/com.clippin.autostart.plist` 实现。
-- `build_release_app.sh` 会生成 `dist/ClipPin.app`、`dist/ClipPin-<version>-macOS.zip` 和 `.sha256`。
+- `build_release_app.sh` 会生成 `release/ClipPin.app`、`release/ClipPin-<version>-macOS.zip` 和 `.sha256`。
 
 ## 后续想法（Post-MVP）
 

@@ -3,5 +3,6 @@
 DerivedData/
 .DS_Store
 dist/
+release/
 DESIGN.md
 RELEASE.md

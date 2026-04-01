@@ -1,4 +1,4 @@
-# ClipPin
+# <img src="./assets/clippin-logo-flat.png" alt="ClipPin logo" width="36" /> ClipPin
 
 [**English**](./README.md) | [简体中文](./README.zh-CN.md)
 
@@ -75,10 +75,6 @@ Optional version:
 ./scripts/build_release_app.sh 1.0.0
 ```
 
-Release workflow template:
-
-- See `RELEASE.md`
-
 Run:
 
 ```bash
@@ -100,7 +96,7 @@ You can change this in the dropdown menu (`Storage Location`).
 - Pinned windows are not restored across app relaunch in MVP.
 - Screenshot hotkey uses system `screencapture -i -c` (interactive region capture to clipboard).
 - Launch at login is implemented via `~/Library/LaunchAgents/com.clippin.autostart.plist`.
-- `build_release_app.sh` creates `dist/ClipPin.app`, `dist/ClipPin-<version>-macOS.zip`, and `.sha256`.
+- `build_release_app.sh` creates `release/ClipPin.app`, `release/ClipPin-<version>-macOS.zip`, and `.sha256`.
 
 ## Future Ideas (Post-MVP)
 

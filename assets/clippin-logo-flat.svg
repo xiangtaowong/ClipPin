@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">ClipPin logo flat style</title>
+  <desc id="desc">Minimal flat icon with clipboard and pin accent.</desc>
+  <rect x="84" y="84" width="856" height="856" rx="196" fill="#1D4ED8"/>
+  <rect x="256" y="220" width="512" height="612" rx="86" fill="#F8FAFF"/>
+  <rect x="398" y="152" width="228" height="118" rx="52" fill="#BDD3FF"/>
+  <rect x="430" y="184" width="164" height="54" rx="24" fill="#FFFFFF"/>
+
+  <rect x="340" y="372" width="286" height="34" rx="17" fill="#A7BFF2"/>
+  <rect x="340" y="438" width="222" height="28" rx="14" fill="#C4D3F6"/>
+  <rect x="340" y="496" width="194" height="28" rx="14" fill="#C4D3F6"/>
+  <rect x="340" y="554" width="246" height="28" rx="14" fill="#C4D3F6"/>
+  <rect x="340" y="612" width="168" height="28" rx="14" fill="#C4D3F6"/>
+
+  <g transform="translate(676,534) rotate(-10)">
+    <ellipse cx="92" cy="72" rx="80" ry="62" fill="#F43F5E"/>
+    <circle cx="92" cy="72" r="20" fill="#FFDCE3"/>
+    <rect x="74" y="118" width="36" height="170" rx="18" fill="#E11D48"/>
+    <path d="M92 336 L58 272 H126 Z" fill="#E11D48"/>
+  </g>
+</svg>

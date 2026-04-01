@@ -6,7 +6,7 @@ BUNDLE_ID="com.clippin.app"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-DIST_DIR="$ROOT_DIR/dist"
+DIST_DIR="$ROOT_DIR/release"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
