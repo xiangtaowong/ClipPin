@@ -11,6 +11,7 @@ Minimal native macOS utility built with Swift + AppKit:
 
 - Menubar app (accessory mode, no dock icon)
 - Global hotkey: `Cmd+Shift+V` to open history dropdown
+- Global quick paste hotkey: default `Option+Shift+C` to open history near cursor
 - Global screenshot hotkey: default `F1` for region capture to clipboard
 - Clipboard monitoring for plain text and images
 - Consecutive dedupe + bounded history (100 items)
@@ -24,6 +25,8 @@ Minimal native macOS utility built with Swift + AppKit:
 ## Controls
 
 - Menubar icon click: open clipboard dropdown menu
+- Global quick paste: `Option` + `Shift` + `C` opens history menu near cursor
+- Quick paste hotkey: configure in `Preferences > Quick Paste Hotkey`, supports manual key capture
 - Click history item: copy back to clipboard (menu closes)
 - `Option` + click history item: pin to front
 - `Shift` + `Option` + click history item: delete from history

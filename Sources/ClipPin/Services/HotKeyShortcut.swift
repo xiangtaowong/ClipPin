@@ -10,6 +10,11 @@ struct HotKeyShortcut: Equatable, Codable {
         modifiers: UInt32(cmdKey | shiftKey)
     )
 
+    static let quickPasteDefault = HotKeyShortcut(
+        keyCode: UInt32(kVK_ANSI_C),
+        modifiers: UInt32(optionKey | shiftKey)
+    )
+
     static let screenshotDefault = HotKeyShortcut(
         keyCode: UInt32(kVK_F1),
         modifiers: 0

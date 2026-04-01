@@ -6,8 +6,15 @@ private func hotKeyHandler(
     _ event: EventRef?,
     _ userData: UnsafeMutableRawPointer?
 ) -> OSStatus {
+    let passToNext: () -> OSStatus = {
+        if let nextHandler {
+            return CallNextEventHandler(nextHandler, event)
+        }
+        return OSStatus(eventNotHandledErr)
+    }
+
     guard let userData else {
-        return noErr
+        return passToNext()
     }
 
     var hotKeyID = EventHotKeyID()
@@ -22,12 +29,12 @@ private func hotKeyHandler(
     )
 
     guard status == noErr else {
-        return noErr
+        return passToNext()
     }
 
     let manager = Unmanaged<GlobalHotKeyManager>.fromOpaque(userData).takeUnretainedValue()
     guard manager.matches(hotKeyID: hotKeyID) else {
-        return noErr
+        return passToNext()
     }
 
     manager.onTrigger?()

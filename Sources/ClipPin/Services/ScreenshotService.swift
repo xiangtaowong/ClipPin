@@ -1,7 +1,17 @@
 import Foundation
+import CoreGraphics
 
 final class ScreenshotService {
+    var onPermissionDenied: (() -> Void)?
+
     func captureSelectionToClipboard() {
+        guard ensureScreenCapturePermission() else {
+            DispatchQueue.main.async { [weak self] in
+                self?.onPermissionDenied?()
+            }
+            return
+        }
+
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -17,5 +27,12 @@ final class ScreenshotService {
                 NSLog("ClipPin failed to run screenshot command: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func ensureScreenCapturePermission() -> Bool {
+        if CGPreflightScreenCaptureAccess() {
+            return true
+        }
+        return CGRequestScreenCaptureAccess()
     }
 }

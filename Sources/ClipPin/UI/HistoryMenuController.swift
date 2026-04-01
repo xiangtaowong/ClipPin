@@ -12,6 +12,8 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     var pinAppearanceSettingsProvider: (() -> PinAppearanceSettings)?
     var onWindowShadowChanged: ((Bool) -> Void)?
     var onDefaultOpacityChanged: ((CGFloat) -> Void)?
+    var quickPasteHotKeyProvider: (() -> HotKeyShortcut)?
+    var onQuickPasteHotKeyManualRequest: (() -> Void)?
     var screenshotHotKeyProvider: (() -> HotKeyShortcut)?
     var onScreenshotHotKeyManualRequest: (() -> Void)?
     var storageLocationProvider: (() -> URL?)?
@@ -438,7 +440,10 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
         return submenu
     }
 
-    private func makeScreenshotHotKeySubmenu(current: HotKeyShortcut) -> NSMenu {
+    private func makeManualHotKeySubmenu(
+        current: HotKeyShortcut,
+        manualAction: Selector
+    ) -> NSMenu {
         let submenu = NSMenu()
 
         let currentItem = NSMenuItem(
@@ -452,7 +457,7 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
         submenu.addItem(.separator())
         let manualItem = NSMenuItem(
             title: "Set Manually…",
-            action: #selector(setScreenshotHotKeyManually(_:)),
+            action: manualAction,
             keyEquivalent: ""
         )
         manualItem.target = self
@@ -515,13 +520,30 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     private func makePreferencesSubmenu() -> NSMenu {
         let submenu = NSMenu()
 
+        let quickPasteShortcut = quickPasteHotKeyProvider?() ?? .quickPasteDefault
+        let quickPasteHotKeyItem = NSMenuItem(
+            title: "Quick Paste Hotkey: \(quickPasteShortcut.displayString)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        quickPasteHotKeyItem.submenu = makeManualHotKeySubmenu(
+            current: quickPasteShortcut,
+            manualAction: #selector(setQuickPasteHotKeyManually(_:))
+        )
+        submenu.addItem(quickPasteHotKeyItem)
+
+        submenu.addItem(.separator())
+
         let screenshotShortcut = screenshotHotKeyProvider?() ?? .screenshotDefault
         let screenshotHotKeyItem = NSMenuItem(
             title: "Screenshot Hotkey: \(screenshotShortcut.displayString)",
             action: nil,
             keyEquivalent: ""
         )
-        screenshotHotKeyItem.submenu = makeScreenshotHotKeySubmenu(current: screenshotShortcut)
+        screenshotHotKeyItem.submenu = makeManualHotKeySubmenu(
+            current: screenshotShortcut,
+            manualAction: #selector(setScreenshotHotKeyManually(_:))
+        )
         submenu.addItem(screenshotHotKeyItem)
 
         let screenshotHintItem = NSMenuItem(
@@ -608,7 +630,6 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
 
         let modifiers = selectionModifiers()
         let optionPressed = modifiers.contains(.option)
-        let commandPressed = modifiers.contains(.command)
         let shiftPressed = modifiers.contains(.shift)
 
         if optionPressed && shiftPressed {
@@ -616,7 +637,7 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
             return
         }
 
-        if optionPressed || commandPressed {
+        if optionPressed {
             onPinRequest?(item)
             return
         }
@@ -635,6 +656,12 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     private func setDefaultOpacity(_ sender: NSMenuItem) {
         let opacity = CGFloat(sender.tag) / 100.0
         onDefaultOpacityChanged?(opacity)
+        rebuildMenuContents()
+    }
+
+    @objc
+    private func setQuickPasteHotKeyManually(_ sender: Any?) {
+        onQuickPasteHotKeyManualRequest?()
         rebuildMenuContents()
     }
 

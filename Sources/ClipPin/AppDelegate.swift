@@ -3,6 +3,7 @@ import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let historyHotKeySignature: OSType = 0x4342484D // "CBHM"
+    private let quickPasteHotKeySignature: OSType = 0x43425150 // "CBQP"
     private let screenshotHotKeySignature: OSType = 0x43425343 // "CBSC"
     private let maxHistoryItems = 100
 
@@ -13,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pinAppearanceStore: PinAppearanceStore?
     private var pinboardManager: PinboardManager?
     private var historyHotKeyManager: GlobalHotKeyManager?
+    private var quickPasteHotKeyManager: GlobalHotKeyManager?
+    private var quickPasteHotKeyStore: QuickPasteHotKeyStore?
     private var screenshotHotKeyManager: GlobalHotKeyManager?
     private var screenshotHotKeyStore: ScreenshotHotKeyStore?
     private var screenshotService: ScreenshotService?
@@ -37,6 +40,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showHistoryMenu(_ sender: Any?) {
         historyMenuController?.prepareForDisplay()
         statusItem?.button?.performClick(nil)
+    }
+
+    @objc
+    private func showQuickPasteMenu(_ sender: Any?) {
+        presentHistoryMenuNearCursor()
     }
 
     @objc
@@ -69,6 +77,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showItem.keyEquivalentModifierMask = [.command, .shift]
         showItem.target = self
         appMenu.addItem(showItem)
+
+        let quickPasteItem = NSMenuItem(
+            title: "Quick Paste Menu",
+            action: #selector(showQuickPasteMenu(_:)),
+            keyEquivalent: ""
+        )
+        quickPasteItem.target = self
+        appMenu.addItem(quickPasteItem)
         appMenu.addItem(.separator())
 
         let quitItem = NSMenuItem(
@@ -97,9 +113,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 appearanceStore: pinAppearanceStore
             )
             let historyHotKeyManager = GlobalHotKeyManager(signature: historyHotKeySignature)
+            let quickPasteHotKeyManager = GlobalHotKeyManager(signature: quickPasteHotKeySignature)
+            let quickPasteHotKeyStore = QuickPasteHotKeyStore()
             let screenshotHotKeyManager = GlobalHotKeyManager(signature: screenshotHotKeySignature)
             let screenshotHotKeyStore = ScreenshotHotKeyStore()
             let screenshotService = ScreenshotService()
+            screenshotService.onPermissionDenied = { [weak self] in
+                self?.presentScreenRecordingPermissionAlert()
+            }
 
             self.historyStore = store
             self.clipboardMonitor = monitor
@@ -107,6 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.pinAppearanceStore = pinAppearanceStore
             self.pinboardManager = pinboardManager
             self.historyHotKeyManager = historyHotKeyManager
+            self.quickPasteHotKeyManager = quickPasteHotKeyManager
+            self.quickPasteHotKeyStore = quickPasteHotKeyStore
             self.screenshotHotKeyManager = screenshotHotKeyManager
             self.screenshotHotKeyStore = screenshotHotKeyStore
             self.screenshotService = screenshotService
@@ -149,6 +172,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             historyMenuController.onDefaultOpacityChanged = { [weak pinAppearanceStore] opacity in
                 pinAppearanceStore?.setDefaultOpacity(opacity)
+            }
+
+            historyMenuController.quickPasteHotKeyProvider = { [weak quickPasteHotKeyStore] in
+                quickPasteHotKeyStore?.shortcut ?? .quickPasteDefault
+            }
+
+            historyMenuController.onQuickPasteHotKeyManualRequest = { [weak self] in
+                self?.promptForQuickPasteHotKeyCapture()
             }
 
             historyMenuController.screenshotHotKeyProvider = { [weak screenshotHotKeyStore] in
@@ -198,6 +229,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     title: "Failed to Register Hotkey",
                     message: "Unable to register default history hotkey Cmd+Shift+V."
                 )
+            }
+
+            quickPasteHotKeyManager.onTrigger = { [weak self] in
+                self?.presentHistoryMenuNearCursor()
+            }
+            let quickPasteShortcut: HotKeyShortcut
+            if isAllowedQuickPasteShortcut(quickPasteHotKeyStore.shortcut) {
+                quickPasteShortcut = quickPasteHotKeyStore.shortcut
+            } else {
+                quickPasteShortcut = .quickPasteDefault
+                quickPasteHotKeyStore.setShortcut(.quickPasteDefault)
+            }
+            if !quickPasteHotKeyManager.register(shortcut: quickPasteShortcut) {
+                quickPasteHotKeyStore.setShortcut(.quickPasteDefault)
+                if !quickPasteHotKeyManager.register(shortcut: .quickPasteDefault) {
+                    presentErrorAlert(
+                        title: "Failed to Register Hotkey",
+                        message: "Unable to register quick paste hotkey. Set it manually in Preferences."
+                    )
+                }
             }
 
             screenshotHotKeyManager.onTrigger = { [weak screenshotService] in
@@ -391,6 +442,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func promptForQuickPasteHotKeyCapture() {
+        guard let current = quickPasteHotKeyStore?.shortcut else {
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Set Quick Paste Hotkey"
+        alert.informativeText = "Press the key combination you want to use.\nPress Esc to cancel."
+        alert.addButton(withTitle: "Cancel")
+
+        let currentLabel = NSTextField(labelWithString: "Current: \(current.displayString)")
+        currentLabel.font = .systemFont(ofSize: 12)
+        currentLabel.textColor = .secondaryLabelColor
+
+        let listeningLabel = NSTextField(labelWithString: "Listening…")
+        listeningLabel.font = .monospacedSystemFont(ofSize: 14, weight: .semibold)
+        listeningLabel.alignment = .center
+
+        let accessory = NSStackView(views: [currentLabel, listeningLabel])
+        accessory.orientation = .vertical
+        accessory.spacing = 8
+        accessory.frame = NSRect(x: 0, y: 0, width: 280, height: 44)
+        alert.accessoryView = accessory
+
+        var capturedShortcut: HotKeyShortcut?
+        var monitor: Any?
+
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            if event.keyCode == UInt16(kVK_Escape) {
+                NSApp.stopModal(withCode: .cancel)
+                alert.window.orderOut(nil)
+                return nil
+            }
+
+            guard !isModifierOnlyKeyCode(event.keyCode) else {
+                NSSound.beep()
+                return nil
+            }
+
+            let shortcut = HotKeyShortcut(
+                keyCode: UInt32(event.keyCode),
+                modifiers: carbonModifiers(from: event.modifierFlags)
+            )
+
+            guard isAllowedQuickPasteShortcut(shortcut) else {
+                listeningLabel.stringValue = "Use ⌥/⌃ with non-F keys"
+                NSSound.beep()
+                return nil
+            }
+
+            if shortcut == .clipboardMenuDefault || shortcut == (screenshotHotKeyStore?.shortcut ?? .screenshotDefault) {
+                listeningLabel.stringValue = "Reserved: \(shortcut.displayString)"
+                NSSound.beep()
+                return nil
+            }
+
+            capturedShortcut = shortcut
+            listeningLabel.stringValue = "Selected: \(shortcut.displayString)"
+            NSApp.stopModal(withCode: .OK)
+            alert.window.orderOut(nil)
+            return nil
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+
+        if response == .OK, let capturedShortcut {
+            applyQuickPasteHotKey(capturedShortcut, persistSelection: true)
+        }
+
+        historyMenuController?.prepareForDisplay()
+    }
+
     private func promptForScreenshotHotKeyCapture() {
         guard let current = screenshotHotKeyStore?.shortcut else {
             return
@@ -440,13 +573,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 modifiers: carbonModifiers(from: event.modifierFlags)
             )
 
-            guard isAllowedManualScreenshotShortcut(shortcut) else {
+            guard isAllowedManualShortcut(shortcut) else {
                 listeningLabel.stringValue = "Use ⌘/⌥/⌃ with non-F keys"
                 NSSound.beep()
                 return nil
             }
 
-            guard shortcut != .clipboardMenuDefault else {
+            if shortcut == .clipboardMenuDefault || shortcut == (quickPasteHotKeyStore?.shortcut ?? .quickPasteDefault) {
                 listeningLabel.stringValue = "Reserved: \(shortcut.displayString)"
                 NSSound.beep()
                 return nil
@@ -478,10 +611,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        if shortcut == .clipboardMenuDefault {
+        if shortcut == .clipboardMenuDefault || shortcut == (quickPasteHotKeyStore?.shortcut ?? .quickPasteDefault) {
             presentErrorAlert(
                 title: "Hotkey Conflict",
-                message: "This shortcut is already used for opening the clipboard menu."
+                message: "This shortcut is already reserved for clipboard menu actions."
             )
             return
         }
@@ -498,6 +631,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if persistSelection {
             screenshotHotKeyStore.setShortcut(shortcut)
+        }
+    }
+
+    private func applyQuickPasteHotKey(_ shortcut: HotKeyShortcut, persistSelection: Bool) {
+        guard let quickPasteHotKeyManager, let quickPasteHotKeyStore else {
+            return
+        }
+
+        guard isAllowedQuickPasteShortcut(shortcut) else {
+            presentErrorAlert(
+                title: "Unsupported Quick Paste Hotkey",
+                message: "Use Option/Control combinations or function keys to avoid app shortcut conflicts."
+            )
+            return
+        }
+
+        if shortcut == .clipboardMenuDefault || shortcut == (screenshotHotKeyStore?.shortcut ?? .screenshotDefault) {
+            presentErrorAlert(
+                title: "Hotkey Conflict",
+                message: "This shortcut is already reserved for another action."
+            )
+            return
+        }
+
+        let previous = quickPasteHotKeyStore.shortcut
+        guard quickPasteHotKeyManager.register(shortcut: shortcut) else {
+            _ = quickPasteHotKeyManager.register(shortcut: previous)
+            presentErrorAlert(
+                title: "Failed to Set Quick Paste Hotkey",
+                message: "That shortcut is unavailable. Please choose a different one."
+            )
+            return
+        }
+
+        if persistSelection {
+            quickPasteHotKeyStore.setShortcut(shortcut)
         }
     }
 
@@ -537,7 +706,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func isAllowedManualScreenshotShortcut(_ shortcut: HotKeyShortcut) -> Bool {
+    private func isAllowedManualShortcut(_ shortcut: HotKeyShortcut) -> Bool {
         let keyCode = Int(shortcut.keyCode)
         if isFunctionKeyCode(keyCode) {
             return true
@@ -545,6 +714,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let nonShiftModifiers = UInt32(cmdKey | optionKey | controlKey)
         return (shortcut.modifiers & nonShiftModifiers) != 0
+    }
+
+    private func isAllowedQuickPasteShortcut(_ shortcut: HotKeyShortcut) -> Bool {
+        let keyCode = Int(shortcut.keyCode)
+        if isFunctionKeyCode(keyCode) {
+            return true
+        }
+
+        let stableModifiers = UInt32(optionKey | controlKey)
+        return (shortcut.modifiers & stableModifiers) != 0
     }
 
     private func isFunctionKeyCode(_ keyCode: Int) -> Bool {
@@ -574,5 +753,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.messageText = title
         alert.informativeText = message
         alert.runModal()
+    }
+
+    private func presentScreenRecordingPermissionAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Screen Recording Permission Required"
+        alert.informativeText = "ClipPin needs Screen Recording permission for region screenshots to capture other app windows correctly."
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Cancel")
+
+        if alert.runModal() == .alertFirstButtonReturn,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func presentHistoryMenuNearCursor() {
+        let showMenu = { [weak self] in
+            guard let self, let historyMenuController else {
+                return
+            }
+
+            historyMenuController.prepareForDisplay()
+            NSApp.activate(ignoringOtherApps: true)
+
+            let location = NSEvent.mouseLocation
+            let anchor = NSPoint(x: location.x + 2, y: location.y - 2)
+            historyMenuController.menu.popUp(positioning: nil, at: anchor, in: nil)
+        }
+
+        if Thread.isMainThread {
+            showMenu()
+        } else {
+            DispatchQueue.main.async(execute: showMenu)
+        }
     }
 }
