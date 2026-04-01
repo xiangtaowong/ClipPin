@@ -13,6 +13,8 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 BIN_SRC="$ROOT_DIR/.build/release/$APP_NAME"
 BIN_DST="$MACOS_DIR/$APP_NAME"
+ICON_SRC_PNG="$ROOT_DIR/assets/clippin-logo-flat.png"
+ICON_DST_ICNS="$RESOURCES_DIR/AppIcon.icns"
 
 VERSION_ARG="${1:-}"
 if [[ -n "$VERSION_ARG" ]]; then
@@ -40,6 +42,31 @@ cp "$BIN_SRC" "$BIN_DST"
 chmod +x "$BIN_DST"
 strip -x "$BIN_DST"
 
+if [[ -f "$ICON_SRC_PNG" ]] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+  echo "Generating app icon..."
+  ICONSET_ROOT="$(mktemp -d "$DIST_DIR/AppIcon.XXXXXX")"
+  ICONSET_DIR="$ICONSET_ROOT/AppIcon.iconset"
+  mkdir -p "$ICONSET_DIR"
+  trap 'rm -rf "$ICONSET_ROOT"' EXIT
+
+  sips -z 16 16 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_16x16.png" >/dev/null
+  sips -z 32 32 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_16x16@2x.png" >/dev/null
+  sips -z 32 32 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_32x32.png" >/dev/null
+  sips -z 64 64 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_32x32@2x.png" >/dev/null
+  sips -z 128 128 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_128x128.png" >/dev/null
+  sips -z 256 256 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_128x128@2x.png" >/dev/null
+  sips -z 256 256 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_256x256.png" >/dev/null
+  sips -z 512 512 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_256x256@2x.png" >/dev/null
+  sips -z 512 512 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_512x512.png" >/dev/null
+  sips -z 1024 1024 "$ICON_SRC_PNG" --out "$ICONSET_DIR/icon_512x512@2x.png" >/dev/null
+
+  iconutil -c icns "$ICONSET_DIR" -o "$ICON_DST_ICNS"
+  rm -rf "$ICONSET_ROOT"
+  trap - EXIT
+else
+  echo "Warning: icon source/tooling missing; app icon will not be embedded."
+fi
+
 cat > "$CONTENTS_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -53,6 +80,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
   <string>${BUNDLE_ID}</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundleName</key>
   <string>${APP_NAME}</string>
   <key>CFBundlePackageType</key>
