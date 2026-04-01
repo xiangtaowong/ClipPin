@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+DerivedData/
+.DS_Store
+dist/
+DESIGN.md
+RELEASE.md
