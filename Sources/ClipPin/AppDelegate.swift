@@ -235,7 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.presentHistoryMenuNearCursor()
             }
             let quickPasteShortcut: HotKeyShortcut
-            if isAllowedQuickPasteShortcut(quickPasteHotKeyStore.shortcut) {
+            if isAllowedManualShortcut(quickPasteHotKeyStore.shortcut) {
                 quickPasteShortcut = quickPasteHotKeyStore.shortcut
             } else {
                 quickPasteShortcut = .quickPasteDefault
@@ -491,8 +491,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 modifiers: carbonModifiers(from: event.modifierFlags)
             )
 
-            guard isAllowedQuickPasteShortcut(shortcut) else {
-                listeningLabel.stringValue = "Use ⌥/⌃ with non-F keys"
+            guard isAllowedManualShortcut(shortcut) else {
+                listeningLabel.stringValue = "Use ⌘/⌥/⌃ with non-F keys"
                 NSSound.beep()
                 return nil
             }
@@ -639,10 +639,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        guard isAllowedQuickPasteShortcut(shortcut) else {
+        guard isAllowedManualShortcut(shortcut) else {
             presentErrorAlert(
                 title: "Unsupported Quick Paste Hotkey",
-                message: "Use Option/Control combinations or function keys to avoid app shortcut conflicts."
+                message: "Use Command/Option/Control combinations or function keys."
             )
             return
         }
@@ -714,16 +714,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let nonShiftModifiers = UInt32(cmdKey | optionKey | controlKey)
         return (shortcut.modifiers & nonShiftModifiers) != 0
-    }
-
-    private func isAllowedQuickPasteShortcut(_ shortcut: HotKeyShortcut) -> Bool {
-        let keyCode = Int(shortcut.keyCode)
-        if isFunctionKeyCode(keyCode) {
-            return true
-        }
-
-        let stableModifiers = UInt32(optionKey | controlKey)
-        return (shortcut.modifiers & stableModifiers) != 0
     }
 
     private func isFunctionKeyCode(_ keyCode: Int) -> Bool {
