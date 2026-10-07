@@ -16,6 +16,8 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     var onQuickPasteHotKeyManualRequest: (() -> Void)?
     var screenshotHotKeyProvider: (() -> HotKeyShortcut)?
     var onScreenshotHotKeyManualRequest: (() -> Void)?
+    var textCaptureHotKeyProvider: (() -> HotKeyShortcut)?
+    var onTextCaptureHotKeyManualRequest: (() -> Void)?
     var storageLocationProvider: (() -> URL?)?
     var defaultStorageLocationProvider: (() -> URL?)?
     var onStorageLocationRequest: (() -> Void)?
@@ -556,6 +558,28 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
 
         submenu.addItem(.separator())
 
+        let textCaptureShortcut = textCaptureHotKeyProvider?() ?? .textCaptureDefault
+        let textCaptureHotKeyItem = NSMenuItem(
+            title: "Text Capture Hotkey: \(textCaptureShortcut.displayString)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        textCaptureHotKeyItem.submenu = makeManualHotKeySubmenu(
+            current: textCaptureShortcut,
+            manualAction: #selector(setTextCaptureHotKeyManually(_:))
+        )
+        submenu.addItem(textCaptureHotKeyItem)
+
+        let textCaptureHintItem = NSMenuItem(
+            title: "Action: select text, remove line breaks, copy",
+            action: nil,
+            keyEquivalent: ""
+        )
+        textCaptureHintItem.isEnabled = false
+        submenu.addItem(textCaptureHintItem)
+
+        submenu.addItem(.separator())
+
         let currentStorage = storageLocationProvider?() ?? defaultStorageLocationProvider?()
         let defaultStorage = defaultStorageLocationProvider?()
         let storageItem = NSMenuItem(
@@ -668,6 +692,12 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     @objc
     private func setScreenshotHotKeyManually(_ sender: Any?) {
         onScreenshotHotKeyManualRequest?()
+        rebuildMenuContents()
+    }
+
+    @objc
+    private func setTextCaptureHotKeyManually(_ sender: Any?) {
+        onTextCaptureHotKeyManualRequest?()
         rebuildMenuContents()
     }
 

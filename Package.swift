@@ -20,6 +20,11 @@ let package = Package(
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-dead_strip", "-Xlinker", "-x"], .when(configuration: .release))
             ]
+        ),
+        .testTarget(
+            name: "ClipPinTests",
+            dependencies: ["ClipPin"],
+            path: "Tests/ClipPinTests"
         )
     ]
 )

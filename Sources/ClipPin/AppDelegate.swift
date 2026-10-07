@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let historyHotKeySignature: OSType = 0x4342484D // "CBHM"
     private let quickPasteHotKeySignature: OSType = 0x43425150 // "CBQP"
     private let screenshotHotKeySignature: OSType = 0x43425343 // "CBSC"
+    private let textCaptureHotKeySignature: OSType = 0x43505443 // "CPTC"
     private let maxHistoryItems = 100
 
     private var statusItem: NSStatusItem?
@@ -19,6 +20,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var screenshotHotKeyManager: GlobalHotKeyManager?
     private var screenshotHotKeyStore: ScreenshotHotKeyStore?
     private var screenshotService: ScreenshotService?
+    private var textCaptureHotKeyManager: GlobalHotKeyManager?
+    private var textCaptureHotKeyStore: TextCaptureHotKeyStore?
+    private var textCaptureService: TextCaptureService?
+    private let captureFeedbackController = CaptureFeedbackController()
     private var storageLocationStore: StorageLocationStore?
     private var launchAtLoginService: LaunchAtLoginService?
 
@@ -118,6 +123,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let screenshotHotKeyManager = GlobalHotKeyManager(signature: screenshotHotKeySignature)
             let screenshotHotKeyStore = ScreenshotHotKeyStore()
             let screenshotService = ScreenshotService()
+            let textCaptureHotKeyManager = GlobalHotKeyManager(signature: textCaptureHotKeySignature)
+            let textCaptureHotKeyStore = TextCaptureHotKeyStore()
+            let textCaptureService = TextCaptureService(screenshotService: screenshotService)
+            textCaptureService.onFeedback = { [weak self] message in
+                self?.captureFeedbackController.show(message)
+            }
             screenshotService.onPermissionDenied = { [weak self] in
                 self?.presentScreenRecordingPermissionAlert()
             }
@@ -133,6 +144,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.screenshotHotKeyManager = screenshotHotKeyManager
             self.screenshotHotKeyStore = screenshotHotKeyStore
             self.screenshotService = screenshotService
+            self.textCaptureHotKeyManager = textCaptureHotKeyManager
+            self.textCaptureHotKeyStore = textCaptureHotKeyStore
+            self.textCaptureService = textCaptureService
             self.storageLocationStore = storageLocationStore
             self.launchAtLoginService = launchAtLoginService
 
@@ -188,6 +202,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             historyMenuController.onScreenshotHotKeyManualRequest = { [weak self] in
                 self?.promptForScreenshotHotKeyCapture()
+            }
+
+            historyMenuController.textCaptureHotKeyProvider = { [weak textCaptureHotKeyStore] in
+                textCaptureHotKeyStore?.shortcut ?? .textCaptureDefault
+            }
+
+            historyMenuController.onTextCaptureHotKeyManualRequest = { [weak self] in
+                self?.promptForTextCaptureHotKeyCapture()
             }
 
             historyMenuController.storageLocationProvider = { [weak self] in
@@ -257,6 +279,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !screenshotHotKeyManager.register(shortcut: screenshotHotKeyStore.shortcut) {
                 screenshotHotKeyStore.setShortcut(.screenshotDefault)
                 _ = screenshotHotKeyManager.register(shortcut: .screenshotDefault)
+            }
+
+            textCaptureHotKeyManager.onTrigger = { [weak textCaptureService] in
+                textCaptureService?.captureSelectionToText()
+            }
+            let savedTextShortcut = textCaptureHotKeyStore.shortcut
+            let textShortcut = isAllowedManualShortcut(savedTextShortcut)
+                && !isHotKeyReserved(savedTextShortcut, for: .textCapture)
+                ? savedTextShortcut : .textCaptureDefault
+            if !isHotKeyReserved(textShortcut, for: .textCapture),
+               textCaptureHotKeyManager.register(shortcut: textShortcut) {
+                textCaptureHotKeyStore.setShortcut(textShortcut)
+            } else {
+                presentErrorAlert(
+                    title: "Failed to Register Text Capture Hotkey",
+                    message: "This shortcut is unavailable. Set it manually in Preferences > Text Capture Hotkey."
+                )
             }
 
             DispatchQueue.global(qos: .utility).async {
@@ -443,95 +482,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func promptForQuickPasteHotKeyCapture() {
-        guard let current = quickPasteHotKeyStore?.shortcut else {
-            return
-        }
-
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = "Set Quick Paste Hotkey"
-        alert.informativeText = "Press the key combination you want to use.\nPress Esc to cancel."
-        alert.addButton(withTitle: "Cancel")
-
-        let currentLabel = NSTextField(labelWithString: "Current: \(current.displayString)")
-        currentLabel.font = .systemFont(ofSize: 12)
-        currentLabel.textColor = .secondaryLabelColor
-
-        let listeningLabel = NSTextField(labelWithString: "Listening…")
-        listeningLabel.font = .monospacedSystemFont(ofSize: 14, weight: .semibold)
-        listeningLabel.alignment = .center
-
-        let accessory = NSStackView(views: [currentLabel, listeningLabel])
-        accessory.orientation = .vertical
-        accessory.spacing = 8
-        accessory.frame = NSRect(x: 0, y: 0, width: 280, height: 44)
-        alert.accessoryView = accessory
-
-        var capturedShortcut: HotKeyShortcut?
-        var monitor: Any?
-
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard let self else {
-                return event
-            }
-
-            if event.keyCode == UInt16(kVK_Escape) {
-                NSApp.stopModal(withCode: .cancel)
-                alert.window.orderOut(nil)
-                return nil
-            }
-
-            guard !isModifierOnlyKeyCode(event.keyCode) else {
-                NSSound.beep()
-                return nil
-            }
-
-            let shortcut = HotKeyShortcut(
-                keyCode: UInt32(event.keyCode),
-                modifiers: carbonModifiers(from: event.modifierFlags)
-            )
-
-            guard isAllowedManualShortcut(shortcut) else {
-                listeningLabel.stringValue = "Use ⌘/⌥/⌃ with non-F keys"
-                NSSound.beep()
-                return nil
-            }
-
-            if shortcut == .clipboardMenuDefault || shortcut == (screenshotHotKeyStore?.shortcut ?? .screenshotDefault) {
-                listeningLabel.stringValue = "Reserved: \(shortcut.displayString)"
-                NSSound.beep()
-                return nil
-            }
-
-            capturedShortcut = shortcut
-            listeningLabel.stringValue = "Selected: \(shortcut.displayString)"
-            NSApp.stopModal(withCode: .OK)
-            alert.window.orderOut(nil)
-            return nil
-        }
-
-        NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
-
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
-        }
-
-        if response == .OK, let capturedShortcut {
-            applyQuickPasteHotKey(capturedShortcut, persistSelection: true)
-        }
-
-        historyMenuController?.prepareForDisplay()
+        promptForHotKeyCapture(for: .quickPaste)
     }
 
     private func promptForScreenshotHotKeyCapture() {
-        guard let current = screenshotHotKeyStore?.shortcut else {
+        promptForHotKeyCapture(for: .screenshot)
+    }
+
+    private func promptForTextCaptureHotKeyCapture() {
+        promptForHotKeyCapture(for: .textCapture)
+    }
+
+    private enum HotKeyAction: CaseIterable {
+        case quickPaste, screenshot, textCapture
+
+        var title: String {
+            switch self {
+            case .quickPaste: return "Quick Paste"
+            case .screenshot: return "Screenshot"
+            case .textCapture: return "Text Capture"
+            }
+        }
+    }
+
+    private func shortcut(for action: HotKeyAction) -> HotKeyShortcut? {
+        switch action {
+        case .quickPaste: return quickPasteHotKeyStore?.shortcut
+        case .screenshot: return screenshotHotKeyStore?.shortcut
+        case .textCapture: return textCaptureHotKeyStore?.shortcut
+        }
+    }
+
+    private func isHotKeyReserved(_ shortcut: HotKeyShortcut, for action: HotKeyAction) -> Bool {
+        shortcut == .clipboardMenuDefault || HotKeyAction.allCases.contains {
+            $0 != action && self.shortcut(for: $0) == shortcut
+        }
+    }
+
+    private func promptForHotKeyCapture(for action: HotKeyAction) {
+        guard let current = shortcut(for: action) else {
             return
         }
 
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Set Screenshot Hotkey"
+        alert.messageText = "Set \(action.title) Hotkey"
         alert.informativeText = "Press the key combination you want to use.\nPress Esc to cancel."
         alert.addButton(withTitle: "Cancel")
 
@@ -579,7 +574,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             }
 
-            if shortcut == .clipboardMenuDefault || shortcut == (quickPasteHotKeyStore?.shortcut ?? .quickPasteDefault) {
+            if isHotKeyReserved(shortcut, for: action) {
                 listeningLabel.stringValue = "Reserved: \(shortcut.displayString)"
                 NSSound.beep()
                 return nil
@@ -600,54 +595,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if response == .OK, let capturedShortcut {
-            applyScreenshotHotKey(capturedShortcut, persistSelection: true)
+            applyHotKey(capturedShortcut, for: action)
         }
 
         historyMenuController?.prepareForDisplay()
     }
 
-    private func applyScreenshotHotKey(_ shortcut: HotKeyShortcut, persistSelection: Bool) {
-        guard let screenshotHotKeyManager, let screenshotHotKeyStore else {
-            return
+    private func applyHotKey(_ shortcut: HotKeyShortcut, for action: HotKeyAction) {
+        let manager: GlobalHotKeyManager?
+        switch action {
+        case .quickPaste: manager = quickPasteHotKeyManager
+        case .screenshot: manager = screenshotHotKeyManager
+        case .textCapture: manager = textCaptureHotKeyManager
         }
-
-        if shortcut == .clipboardMenuDefault || shortcut == (quickPasteHotKeyStore?.shortcut ?? .quickPasteDefault) {
-            presentErrorAlert(
-                title: "Hotkey Conflict",
-                message: "This shortcut is already reserved for clipboard menu actions."
-            )
-            return
-        }
-
-        let previous = screenshotHotKeyStore.shortcut
-        guard screenshotHotKeyManager.register(shortcut: shortcut) else {
-            _ = screenshotHotKeyManager.register(shortcut: previous)
-            presentErrorAlert(
-                title: "Failed to Set Screenshot Hotkey",
-                message: "That shortcut is unavailable. Please choose a different one."
-            )
-            return
-        }
-
-        if persistSelection {
-            screenshotHotKeyStore.setShortcut(shortcut)
-        }
-    }
-
-    private func applyQuickPasteHotKey(_ shortcut: HotKeyShortcut, persistSelection: Bool) {
-        guard let quickPasteHotKeyManager, let quickPasteHotKeyStore else {
+        guard let manager, let previous = self.shortcut(for: action) else {
             return
         }
 
         guard isAllowedManualShortcut(shortcut) else {
             presentErrorAlert(
-                title: "Unsupported Quick Paste Hotkey",
+                title: "Unsupported \(action.title) Hotkey",
                 message: "Use Command/Option/Control combinations or function keys."
             )
             return
         }
 
-        if shortcut == .clipboardMenuDefault || shortcut == (screenshotHotKeyStore?.shortcut ?? .screenshotDefault) {
+        if isHotKeyReserved(shortcut, for: action) {
             presentErrorAlert(
                 title: "Hotkey Conflict",
                 message: "This shortcut is already reserved for another action."
@@ -655,18 +628,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let previous = quickPasteHotKeyStore.shortcut
-        guard quickPasteHotKeyManager.register(shortcut: shortcut) else {
-            _ = quickPasteHotKeyManager.register(shortcut: previous)
+        guard manager.register(shortcut: shortcut) else {
+            _ = manager.register(shortcut: previous)
             presentErrorAlert(
-                title: "Failed to Set Quick Paste Hotkey",
+                title: "Failed to Set \(action.title) Hotkey",
                 message: "That shortcut is unavailable. Please choose a different one."
             )
             return
         }
 
-        if persistSelection {
-            quickPasteHotKeyStore.setShortcut(shortcut)
+        switch action {
+        case .quickPaste: quickPasteHotKeyStore?.setShortcut(shortcut)
+        case .screenshot: screenshotHotKeyStore?.setShortcut(shortcut)
+        case .textCapture: textCaptureHotKeyStore?.setShortcut(shortcut)
         }
     }
 
@@ -749,7 +723,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Screen Recording Permission Required"
-        alert.informativeText = "ClipPin needs Screen Recording permission for region screenshots to capture other app windows correctly."
+        alert.informativeText = "ClipPin needs Screen Recording permission for screenshots and text capture from other app windows."
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Cancel")
 

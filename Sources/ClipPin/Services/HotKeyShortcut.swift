@@ -20,6 +20,11 @@ struct HotKeyShortcut: Equatable, Codable {
         modifiers: 0
     )
 
+    static let textCaptureDefault = HotKeyShortcut(
+        keyCode: UInt32(kVK_ANSI_T),
+        modifiers: UInt32(optionKey | shiftKey)
+    )
+
     static let screenshotPresets: [HotKeyShortcut] = [
         HotKeyShortcut(keyCode: UInt32(kVK_F1), modifiers: 0),
         HotKeyShortcut(keyCode: UInt32(kVK_F2), modifiers: 0),
