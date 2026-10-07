@@ -1,0 +1,66 @@
+name: Publish ClipPin v1.1.0
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/publish-v1.1.0.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-clippin-v1.1.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out the immutable release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: v1.1.0
+          persist-credentials: false
+
+      - name: Test
+        run: swift test --disable-xctest
+
+      - name: Build and validate Apple Silicon app
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          ./scripts/build_release_app.sh 1.1.0
+          test -s release/ClipPin.app/Contents/Resources/AppIcon.icns
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' release/ClipPin.app/Contents/Info.plist)" = 1.1.0
+          codesign --verify --deep --strict release/ClipPin.app
+          unzip -t release/ClipPin-1.1.0-macOS.zip
+          (cd release && shasum -a 256 -c ClipPin-1.1.0-macOS.zip.sha256)
+
+      - name: Extract bilingual release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk '/^## 1\.1\.0 / {inside=1; next} inside && /^## / {exit} inside {print}' CHANGELOG.md > release/notes.md
+          test -s release/notes.md
+
+      - name: Upload assets before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.1.0 >/dev/null 2>&1; then
+            echo 'Release v1.1.0 already exists; refusing to overwrite it.' >&2
+            exit 1
+          fi
+          gh release create v1.1.0 \
+            release/ClipPin-1.1.0-macOS.zip \
+            release/ClipPin-1.1.0-macOS.zip.sha256 \
+            --verify-tag --draft --title 'ClipPin v1.1.0' \
+            --notes-file release/notes.md
+          gh release edit v1.1.0 --draft=false --latest
+          gh release view v1.1.0 --json url,tagName,isDraft,assets
