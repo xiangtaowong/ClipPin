@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let captureFeedbackController = CaptureFeedbackController()
     private var storageLocationStore: StorageLocationStore?
     private var launchAtLoginService: LaunchAtLoginService?
+    private var livePinManager: AnyObject?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
@@ -39,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         clipboardMonitor?.stop()
+        if #available(macOS 14.0, *) {
+            (livePinManager as? LivePinManager)?.closeAll()
+        }
     }
 
     @objc
@@ -149,6 +153,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.textCaptureService = textCaptureService
             self.storageLocationStore = storageLocationStore
             self.launchAtLoginService = launchAtLoginService
+
+            if #available(macOS 14.0, *) {
+                MainActor.assumeIsolated {
+                    let livePinManager = LivePinManager(appearanceProvider: { [weak pinAppearanceStore] in
+                        pinAppearanceStore?.settings ?? .default
+                    })
+                    livePinManager.onError = { [weak self] message in
+                        self?.presentErrorAlert(title: "Unable to Start Live Pin", message: message)
+                    }
+                    historyMenuController.onLivePinRequest = { [weak livePinManager] in
+                        Task { @MainActor in livePinManager?.chooseWindow() }
+                    }
+                    self.livePinManager = livePinManager
+                }
+            }
 
             statusItem?.menu = historyMenuController.menu
 

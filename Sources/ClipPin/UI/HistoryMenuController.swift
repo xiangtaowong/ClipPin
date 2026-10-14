@@ -8,6 +8,7 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     var onDeleteRequest: ((ClipItem) -> Void)?
     var onClearRequest: (() -> Void)?
     var onQuitRequest: (() -> Void)?
+    var onLivePinRequest: (() -> Void)?
     var imageProvider: ((ClipItem) -> NSImage?)?
     var pinAppearanceSettingsProvider: (() -> PinAppearanceSettings)?
     var onWindowShadowChanged: ((Bool) -> Void)?
@@ -250,6 +251,19 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
 
         menu.addItem(.separator())
 
+        let livePinItem = NSMenuItem(title: "Live Pin…", action: #selector(startLivePin(_:)), keyEquivalent: "")
+        livePinItem.target = self
+        livePinItem.image = symbolImage(name: "rectangle.on.rectangle", pointSize: 13)
+        if #available(macOS 14.0, *) {
+            livePinItem.isEnabled = onLivePinRequest != nil
+            livePinItem.toolTip = "Choose a window to keep its live content on top. Option-drag to crop."
+        } else {
+            livePinItem.isEnabled = false
+            livePinItem.toolTip = "Live Pin requires macOS 14 or later."
+        }
+        menu.addItem(livePinItem)
+        menu.addItem(.separator())
+
         let appearanceSettings = pinAppearanceSettingsProvider?() ?? .default
         let shadowItem = NSMenuItem(
             title: "Window Shadow",
@@ -332,6 +346,13 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
         menuItem.tag = selectionAction.rawValue
         menuItem.toolTip = tooltipText(for: item)
         menuItem.image = iconImage(for: item)
+        // These images preview clipboard content, rather than decorate commands.
+        // macOS 27 hides menu images by default for apps linked to its SDK.
+        #if compiler(>=6.4)
+        if #available(macOS 27.0, *) {
+            menuItem.preferredImageVisibility = .visible
+        }
+        #endif
         menuItem.attributedTitle = attributedTitle(for: item)
         if let alternateModifiers {
             menuItem.isAlternate = true
@@ -667,6 +688,12 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
         }
 
         onCopyRequest?(item)
+    }
+
+    @objc
+    private func startLivePin(_ sender: Any?) {
+        // Present the system picker after the history menu finishes tracking.
+        DispatchQueue.main.async { [weak self] in self?.onLivePinRequest?() }
     }
 
     @objc

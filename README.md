@@ -7,6 +7,7 @@ Minimal native macOS utility built with Swift + AppKit:
 - Clipboard history (text + images)
 - Pin any history item as floating always-on-top cards
 - Capture text from a screen region, remove line breaks, and copy it locally
+- Live Pin an application window, or crop its live captions into a floating card (macOS 14+)
 
 ## Download & Install
 
@@ -16,13 +17,13 @@ When updating, quit ClipPin before replacing `/Applications/ClipPin.app`. Launch
 
 The app uses ad-hoc signing, so an update may require permission again. If the switch is on but capture is denied, remove the old ClipPin entry with `-`, add `/Applications/ClipPin.app` with `+`, enable it, and restart ClipPin.
 
-## What's New in 1.1.0
+## What's New in 1.2.4
 
-- Independent screen-region text capture with accurate, on-device Chinese and English OCR.
-- Recognized text is copied as one line: Chinese lines are joined directly, and English words retain separating spaces.
-- New configurable `Text Capture Hotkey`, alongside Screenshot and Quick Paste; conflicting ClipPin shortcuts are rejected.
-- Cancelled captures and empty recognition results preserve the clipboard. Temporary OCR screenshots are deleted.
-- Screenshot copying, clipboard history, and text/image pins with default opacity settings remain available.
+- Live Pin application windows with live updates, cropping, pause/resume, and per-pin opacity (macOS 14+).
+- Content starts at the original window's size, including across displays with different pixel densities.
+- Freely resize any edge or corner; drag the image or scroll to pan, and Command-drag to move the pin.
+- Recover from lost window-picker callbacks and keep clipboard previews visible on macOS 27.
+- Existing screenshots, on-device OCR, clipboard history, and text/image pins remain available.
 
 See [CHANGELOG.md](./CHANGELOG.md) for release history.
 
@@ -78,6 +79,20 @@ Your saved shortcuts are preserved when updating. The `Cmd+1/2/3` examples are n
 - Launch at login: toggle in `Preferences`
 - `Clear History`: clears all entries with confirmation
 
+### Live Pin (macOS 14+)
+
+1. Open the ClipPin menubar dropdown and choose `Live Pin…`.
+2. Use the system picker to choose a single application window. Its live content appears in a floating pin.
+3. Hold `Option` and drag across the pin to keep a region, such as live captions. Alternatively, right-click and choose `Crop Region…`, then drag to select. Press `Esc` to cancel and preserve the previous crop.
+4. Drag any edge or corner to freely resize the viewport; drag the image or scroll to pan. Hold `Command` and drag to move the pin. Live Pins start fully opaque for readable text and retain the existing shadow preference. Adjust transparency per pin through the right-click `Opacity` menu.
+5. Right-click for `Actual Size (100%)`, `Show Whole Window`, `Pause Live Pin` / `Resume Live Pin`, or `Close Live Pin`.
+
+Live Pin matches the original window's size in screen points, so text keeps the same size even when the source and pin use displays with different pixel densities. Resizing the floating window changes the visible area without changing the content scale; drag the image or scroll to see content outside the viewport. `Actual Size (100%)` resets the view and expands it to the original window size, within the screen's available space. Capture updates to native resolution when the source changes size, keeping the last clear frame while resized capture catches up. Large windows are never silently downscaled; a capture limit or failure is reported by ScreenCaptureKit.
+
+The source window can be covered or moved to another display. Keep it open and unminimized: minimized or unavailable windows stop updating, and restoring them normally resumes capture. If the source closes or capture fails, the pin shows a status message; close it and choose the source again when needed. Crops follow a proportional area of the source, so changes to the source layout can move text out of the selected region.
+
+Live Pin uses ScreenCaptureKit and the system content picker. It only displays the selected window locally, with no audio capture, OCR, clipboard changes, saved frames, or uploads. `Pause` stops the capture stream, and closing a pin releases it. Multiple Live Pins may coexist. Live Pins are not restored after quitting. This entry is disabled on macOS 13; clipboard pins, screenshots, and OCR remain available.
+
 Pinned cards:
 
 - Content-only window (no extra toolbar buttons)
@@ -88,7 +103,7 @@ Pinned cards:
 Pinned appearance settings (in dropdown menu):
 
 - `Window Shadow` toggle
-- `Default Opacity` for new pinned windows
+- `Default Opacity` for new clipboard pins; Live Pins have their own opacity menu
 
 ## Build & Run
 
@@ -103,7 +118,7 @@ Build:
 swift build
 ```
 
-Run OCR and clipboard tests with Swift 6+ on macOS 14+ (Swift Testing):
+Run OCR, clipboard, and Live Pin crop-geometry tests with Swift 6+ on macOS 14+ (Swift Testing):
 
 ```bash
 swift test --disable-xctest
