@@ -17,6 +17,8 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     var onQuickPasteHotKeyManualRequest: (() -> Void)?
     var screenshotHotKeyProvider: (() -> HotKeyShortcut)?
     var onScreenshotHotKeyManualRequest: (() -> Void)?
+    var screenshotEditorEnabledProvider: (() -> Bool)?
+    var onScreenshotEditorChanged: ((Bool) -> Void)?
     var textCaptureHotKeyProvider: (() -> HotKeyShortcut)?
     var onTextCaptureHotKeyManualRequest: (() -> Void)?
     var storageLocationProvider: (() -> URL?)?
@@ -569,8 +571,15 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
         )
         submenu.addItem(screenshotHotKeyItem)
 
+        let editorEnabled = screenshotEditorEnabledProvider?() ?? true
+        let editorItem = NSMenuItem(title: "Edit After Region Screenshot",
+                                   action: #selector(toggleScreenshotEditor(_:)), keyEquivalent: "")
+        editorItem.target = self
+        editorItem.state = editorEnabled ? .on : .off
+        submenu.addItem(editorItem)
+
         let screenshotHintItem = NSMenuItem(
-            title: "Action: region screenshot to clipboard",
+            title: editorEnabled ? "Action: select region, edit, then copy" : "Action: region screenshot to clipboard",
             action: nil,
             keyEquivalent: ""
         )
@@ -713,6 +722,12 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     @objc
     private func setQuickPasteHotKeyManually(_ sender: Any?) {
         onQuickPasteHotKeyManualRequest?()
+        rebuildMenuContents()
+    }
+
+    @objc
+    private func toggleScreenshotEditor(_ sender: NSMenuItem) {
+        onScreenshotEditorChanged?(!(screenshotEditorEnabledProvider?() ?? true))
         rebuildMenuContents()
     }
 
