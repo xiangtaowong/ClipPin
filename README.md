@@ -9,7 +9,7 @@ Minimal native macOS utility built with Swift + AppKit:
 - Capture text from a screen region, remove line breaks, and copy it locally
 - Live Pin an application window, or crop its live captions into a floating card (macOS 14+)
 
-## Screenshot editor (development build)
+## 1.3.0 screenshot editor and cropping
 
 After selecting a region with the screenshot hotkey (default `F1`), ClipPin opens an annotation editor with cropping, freehand drawing, translucent highlighting, arrows, rectangles, ellipses, and text. Choose a preset or custom color, adjust stroke/text size, and undo, redo, or clear annotations.
 
