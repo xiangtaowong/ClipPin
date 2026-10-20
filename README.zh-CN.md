@@ -9,6 +9,18 @@
 - 框选屏幕区域识别文字，自动去除换行并复制，全程本机处理
 - 将应用窗口的实时画面置顶，也能裁出其中的字幕区域（macOS 14+）
 
+## 截图后编辑（开发版）
+
+按截图快捷键（默认 `F1`）框选区域后，自动打开编辑器。支持裁剪、涂鸦、高亮、箭头、矩形、椭圆和文字，可选择预设或自定义颜色、调整粗细与文字大小，以及撤销、重做、清空。
+
+- `Preferences > Edit After Region Screenshot` 控制是否弹出编辑器，默认开启，重启后保留设置。关闭后框选截图直接复制。
+- 点击 `Copy & Close` 或按 `Command+C` 复制编辑后的图片并关闭；`Save PNG…` / `Command+S` 另存为 PNG，保留编辑窗口。
+- 滚动查看图片，触控板捏合或 `Command` + `+` / `-` 缩放，`Fit` / `Command+0` 适应窗口。
+- `Command+Z` 撤销，`Command+Shift+Z` 重做；取消或按 `Esc` 不改变剪贴板。
+- 点击 `Crop`，拖动框选裁剪区域；拖动内部可移动选区，拖动四边或四角可调整大小。点击 `Apply Crop` 或按 `Enter` 确认，`Cancel Crop` / `Esc` 仅取消本次裁剪。
+- 裁剪和标注共用撤销/重做记录，撤销裁剪可恢复原图和裁掉的标注。
+- 导出保留所选区域的原始像素，不缩放；标注会合并进 PNG。识字快捷键继续直接识别文字。
+
 ## 下载与安装
 
 在 [GitHub Releases](https://github.com/xiangtaowong/ClipPin/releases/latest) 下载 app 的 zip，解压后将 `ClipPin.app` 放到 `/Applications`。本次发布支持 macOS 13 及以上的 Apple Silicon Mac。

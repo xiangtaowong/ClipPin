@@ -9,6 +9,18 @@ Minimal native macOS utility built with Swift + AppKit:
 - Capture text from a screen region, remove line breaks, and copy it locally
 - Live Pin an application window, or crop its live captions into a floating card (macOS 14+)
 
+## Screenshot editor (development build)
+
+After selecting a region with the screenshot hotkey (default `F1`), ClipPin opens an annotation editor with cropping, freehand drawing, translucent highlighting, arrows, rectangles, ellipses, and text. Choose a preset or custom color, adjust stroke/text size, and undo, redo, or clear annotations.
+
+- Toggle `Preferences > Edit After Region Screenshot` to enable or disable the editor. Enabled by default; the preference persists across restarts. When disabled, region screenshots copy directly to the clipboard.
+- `Copy & Close` / `Command+C` copies the result and closes the editor. `Save PNG…` / `Command+S` saves a file and keeps the editor open.
+- Scroll to pan; pinch or use `Command` + `+` / `-` to zoom. `Fit` / `Command+0` fits the image to the viewport.
+- `Command+Z` undoes, `Command+Shift+Z` redoes. Cancel or `Esc` leaves the clipboard unchanged.
+- Choose `Crop`, then drag to select a region. Drag inside to move it or drag any edge/corner handle to resize. `Apply Crop` / `Enter` confirms; `Cancel Crop` / `Esc` cancels just the pending crop.
+- Crops and annotations share the undo/redo history. Undoing a crop restores the original image and marks outside the crop.
+- Exports retain the selected region's native pixels without scaling and flatten annotations into the PNG. OCR capture continues to recognize text directly.
+
 ## Download & Install
 
 Download the app zip from [GitHub Releases](https://github.com/xiangtaowong/ClipPin/releases/latest), unzip it, and move `ClipPin.app` to `/Applications`. This release supports Apple Silicon Macs running macOS 13 or later.

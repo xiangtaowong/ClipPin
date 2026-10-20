@@ -20,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var screenshotHotKeyManager: GlobalHotKeyManager?
     private var screenshotHotKeyStore: ScreenshotHotKeyStore?
     private var screenshotService: ScreenshotService?
+    private var screenshotWorkflow: ScreenshotWorkflow?
+    private var screenshotEditor: ScreenshotEditorController?
+    private let screenshotEditorSettings = ScreenshotEditorSettings()
     private var textCaptureHotKeyManager: GlobalHotKeyManager?
     private var textCaptureHotKeyStore: TextCaptureHotKeyStore?
     private var textCaptureService: TextCaptureService?
@@ -148,6 +151,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.screenshotHotKeyManager = screenshotHotKeyManager
             self.screenshotHotKeyStore = screenshotHotKeyStore
             self.screenshotService = screenshotService
+            let screenshotWorkflow = ScreenshotWorkflow(
+                capture: screenshotService, settings: screenshotEditorSettings
+            ) { [weak self] data, completion in
+                guard let self else { completion(nil); return }
+                guard let editor = ScreenshotEditorController(data: data, completion: { [weak self] output in
+                    completion(output)
+                    self?.screenshotEditor = nil
+                }) else {
+                    self.captureFeedbackController.show("Unable to open screenshot editor.")
+                    completion(nil)
+                    return
+                }
+                self.screenshotEditor = editor
+                editor.present()
+            }
+            screenshotWorkflow.onFeedback = { [weak self] message in
+                self?.captureFeedbackController.show(message)
+            }
+            self.screenshotWorkflow = screenshotWorkflow
             self.textCaptureHotKeyManager = textCaptureHotKeyManager
             self.textCaptureHotKeyStore = textCaptureHotKeyStore
             self.textCaptureService = textCaptureService
@@ -223,6 +245,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.promptForScreenshotHotKeyCapture()
             }
 
+            historyMenuController.screenshotEditorEnabledProvider = { [weak self] in
+                self?.screenshotEditorSettings.isEnabled ?? true
+            }
+            historyMenuController.onScreenshotEditorChanged = { [weak self] enabled in
+                self?.screenshotEditorSettings.isEnabled = enabled
+            }
+
             historyMenuController.textCaptureHotKeyProvider = { [weak textCaptureHotKeyStore] in
                 textCaptureHotKeyStore?.shortcut ?? .textCaptureDefault
             }
@@ -292,8 +321,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            screenshotHotKeyManager.onTrigger = { [weak screenshotService] in
-                screenshotService?.captureSelectionToClipboard()
+            screenshotHotKeyManager.onTrigger = { [weak screenshotWorkflow] in
+                screenshotWorkflow?.captureSelection()
             }
             if !screenshotHotKeyManager.register(shortcut: screenshotHotKeyStore.shortcut) {
                 screenshotHotKeyStore.setShortcut(.screenshotDefault)

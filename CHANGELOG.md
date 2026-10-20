@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added / 新增
+
+- Crop tool with movable selection, eight resize handles, pixel dimensions, confirm/cancel, and undo/redo that restores source pixels and annotations. / 新增裁剪工具，支持移动选区、八个边角调整点、像素尺寸、确认/取消，以及可恢复原图和标注的撤销重做。
+
+- Optional editor after region screenshots, enabled by default with a persistent Preferences toggle. / 框选截图后可自动编辑，设置开关默认开启并持久保存。
+- Freehand drawing, highlighter, arrows, rectangles, ellipses, text, preset/custom colors, size control, undo/redo, clear, zoom, PNG export, and copy. / 支持涂鸦、高亮、箭头、矩形、椭圆、文字、预设及自定义颜色、粗细、撤销重做、清空、缩放、PNG 导出和复制。
+- Native pixel resolution is preserved; canceling leaves the clipboard unchanged. OCR remains independent of the editor. / 保留原始像素、不缩放；取消不改变剪贴板，识字不经过编辑器。
+
 ## 1.2.4 - 2026-10-14
 
 - Restore clipboard history thumbnails on macOS 27 by explicitly keeping content preview images visible, including Option and Option-Shift menu variants.
