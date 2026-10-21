@@ -1,7 +1,7 @@
 import AppKit
 
 final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelegate {
-    let menu = NSMenu()
+    let menu = HistoryShortcutMenu()
 
     var onPinRequest: ((ClipItem) -> Void)?
     var onCopyRequest: ((ClipItem) -> Void)?
@@ -9,6 +9,9 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     var onClearRequest: (() -> Void)?
     var onQuitRequest: (() -> Void)?
     var onLivePinRequest: (() -> Void)?
+    var onScreenshotRequest: (() -> Void)?
+    var onTextCaptureRequest: (() -> Void)?
+    var onMenuTrackingChanged: ((Bool) -> Void)?
     var imageProvider: ((ClipItem) -> NSImage?)?
     var pinAppearanceSettingsProvider: (() -> PinAppearanceSettings)?
     var onWindowShadowChanged: ((Bool) -> Void)?
@@ -43,6 +46,10 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     private var currentStartIndex: Int
     private var menuNeedsRebuild = true
     private var isMenuVisible = false
+    private var pendingCaptureAction: (() -> Void)?
+    private var menuKeyObserver: CFRunLoopObserver?
+    private let imagePreview = HistoryImagePreviewController()
+    var previewedImageID: UUID? { imagePreview.visibleItemID }
 
     private enum ClipSelectionAction: Int {
         case copy = 0
@@ -74,6 +81,8 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
 
     func menuWillOpen(_ menu: NSMenu) {
         isMenuVisible = true
+        onMenuTrackingChanged?(true)
+        installMenuKeyObserver()
         installModifierTracking()
         currentStartIndex = 0
         searchField.stringValue = ""
@@ -88,7 +97,88 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
 
     func menuDidClose(_ menu: NSMenu) {
         isMenuVisible = false
+        imagePreview.hide()
+        if let menuKeyObserver {
+            CFRunLoopRemoveObserver(CFRunLoopGetMain(), menuKeyObserver, CFRunLoopMode(RunLoop.Mode.eventTracking.rawValue as CFString))
+            self.menuKeyObserver = nil
+        }
         removeModifierTracking()
+        onMenuTrackingChanged?(false)
+        if let action = pendingCaptureAction {
+            pendingCaptureAction = nil
+            DispatchQueue.main.async(execute: action)
+        }
+    }
+
+    /// Capture must start after NSMenu releases its tracking loop and disappears.
+    func performAfterClosing(_ action: @escaping () -> Void) {
+        guard isMenuVisible else { action(); return }
+        guard pendingCaptureAction == nil else { return }
+        pendingCaptureAction = action
+        imagePreview.hide()
+        menu.cancelTracking()
+    }
+
+    @discardableResult
+    func dismissIfVisible() -> Bool {
+        guard isMenuVisible else { return false }
+        imagePreview.hide()
+        menu.cancelTracking()
+        return true
+    }
+
+    @discardableResult
+    func handleCaptureShortcut(_ event: NSEvent) -> Bool {
+        guard isMenuVisible else { return false }
+        if (screenshotHotKeyProvider?() ?? .screenshotDefault).matches(event) {
+            performAfterClosing { [weak self] in self?.onScreenshotRequest?() }
+            return true
+        }
+        if (textCaptureHotKeyProvider?() ?? .textCaptureDefault).matches(event) {
+            performAfterClosing { [weak self] in self?.onTextCaptureRequest?() }
+            return true
+        }
+        if (quickPasteHotKeyProvider?() ?? .quickPasteDefault).matches(event) || HotKeyShortcut.clipboardMenuDefault.matches(event) {
+            menu.cancelTracking()
+            return true
+        }
+        return false
+    }
+
+    private func isCaptureShortcut(_ event: NSEvent) -> Bool {
+        [(screenshotHotKeyProvider?() ?? .screenshotDefault),
+         (textCaptureHotKeyProvider?() ?? .textCaptureDefault),
+         (quickPasteHotKeyProvider?() ?? .quickPasteDefault), .clipboardMenuDefault].contains { $0.matches(event) }
+    }
+
+    private func installMenuKeyObserver() {
+        guard menuKeyObserver == nil else { return }
+        // NSMenu can consume command keys before NSEvent's local monitor sees
+        // them. Inspect only the queue head so mouse movement and normal search
+        // typing remain in the menu's own tracking loop.
+        let mode = RunLoop.Mode.eventTracking
+        menuKeyObserver = CFRunLoopObserverCreateWithHandler(nil,
+            CFRunLoopActivity.beforeSources.rawValue, true, 0) { [weak self] _, _ in
+                guard let self, self.isMenuVisible,
+                      let event = NSApp.nextEvent(matching: .any, until: .distantPast, inMode: mode, dequeue: false),
+                      self.isCaptureShortcut(event) else { return }
+                _ = NSApp.nextEvent(matching: .keyDown, until: .distantPast, inMode: mode, dequeue: true)
+                self.handleCaptureShortcut(event)
+            }
+        if let menuKeyObserver {
+            CFRunLoopAddObserver(CFRunLoopGetMain(), menuKeyObserver, CFRunLoopMode(mode.rawValue as CFString))
+        }
+    }
+
+    func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        guard let item, let clip = clipItem(for: item), clip.kind == .image,
+              let image = imageProvider?(clip), let menuWindow = searchField.window else {
+            imagePreview.hide()
+            return
+        }
+        let screen = menuWindow.screen ?? NSScreen.main
+        guard let screen else { imagePreview.hide(); return }
+        imagePreview.show(image: image, itemID: clip.id, menuFrame: menuWindow.frame, screen: screen)
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -100,6 +190,7 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     private func setupMenu() {
         menu.autoenablesItems = false
         menu.delegate = self
+        menu.onCaptureShortcut = { [weak self] in self?.handleCaptureShortcut($0) ?? false }
 
         searchField.frame = NSRect(x: 10, y: 4, width: menuWidth - 20, height: 24)
         searchField.placeholderString = "Search history"
@@ -121,8 +212,11 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
         lastClickModifierFlags = initialFlags
 
         localEventMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.flagsChanged, .leftMouseDown, .scrollWheel]
+            matching: [.flagsChanged, .leftMouseDown, .scrollWheel, .keyDown]
         ) { [weak self] event in
+            if event.type == .keyDown {
+                return self?.handleCaptureShortcut(event) == true ? nil : event
+            }
             if event.type == .scrollWheel {
                 if self?.scrollVisibleWindow(for: event) == true {
                     return nil
@@ -195,6 +289,7 @@ final class HistoryMenuController: NSObject, NSMenuDelegate, NSSearchFieldDelega
     }
 
     private func rebuildMenuContents() {
+        imagePreview.hide()
         while menu.items.count > 2 {
             menu.removeItem(at: 2)
         }

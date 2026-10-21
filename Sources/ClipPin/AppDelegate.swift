@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc
     private func showHistoryMenu(_ sender: Any?) {
+        if historyMenuController?.dismissIfVisible() == true { return }
         historyMenuController?.prepareForDisplay()
         statusItem?.button?.performClick(nil)
     }
@@ -170,6 +171,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.captureFeedbackController.show(message)
             }
             self.screenshotWorkflow = screenshotWorkflow
+            historyMenuController.onScreenshotRequest = { [weak screenshotWorkflow] in
+                screenshotWorkflow?.captureSelection()
+            }
+            historyMenuController.onTextCaptureRequest = { [weak textCaptureService] in
+                textCaptureService?.captureSelectionToText()
+            }
+            historyMenuController.onMenuTrackingChanged = { [weak self] tracking in
+                guard let self else { return }
+                [self.historyHotKeyManager, self.quickPasteHotKeyManager,
+                 self.screenshotHotKeyManager, self.textCaptureHotKeyManager].forEach {
+                    $0?.setSuspendedForMenu(tracking)
+                }
+            }
             self.textCaptureHotKeyManager = textCaptureHotKeyManager
             self.textCaptureHotKeyStore = textCaptureHotKeyStore
             self.textCaptureService = textCaptureService
@@ -321,16 +335,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            screenshotHotKeyManager.onTrigger = { [weak screenshotWorkflow] in
-                screenshotWorkflow?.captureSelection()
+            screenshotHotKeyManager.onTrigger = { [weak self, weak screenshotWorkflow] in
+                self?.historyMenuController?.performAfterClosing { [weak screenshotWorkflow] in
+                    screenshotWorkflow?.captureSelection()
+                }
             }
             if !screenshotHotKeyManager.register(shortcut: screenshotHotKeyStore.shortcut) {
                 screenshotHotKeyStore.setShortcut(.screenshotDefault)
                 _ = screenshotHotKeyManager.register(shortcut: .screenshotDefault)
             }
 
-            textCaptureHotKeyManager.onTrigger = { [weak textCaptureService] in
-                textCaptureService?.captureSelectionToText()
+            textCaptureHotKeyManager.onTrigger = { [weak self, weak textCaptureService] in
+                self?.historyMenuController?.performAfterClosing { [weak textCaptureService] in
+                    textCaptureService?.captureSelectionToText()
+                }
             }
             let savedTextShortcut = textCaptureHotKeyStore.shortcut
             let textShortcut = isAllowedManualShortcut(savedTextShortcut)
@@ -786,6 +804,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, let historyMenuController else {
                 return
             }
+
+            if historyMenuController.dismissIfVisible() { return }
 
             historyMenuController.prepareForDisplay()
             NSApp.activate(ignoringOtherApps: true)

@@ -9,6 +9,12 @@ Minimal native macOS utility built with Swift + AppKit:
 - Capture text from a screen region, remove line breaks, and copy it locally
 - Live Pin an application window, or crop its live captions into a floating card (macOS 14+)
 
+## 1.3.1 menu shortcuts and image previews
+
+Screenshot and OCR shortcuts also work while the history menu is open. For example, open Quick Paste with your configured `Command+2`, then press your configured `Command+1` to dismiss the menu and capture a region. Existing custom shortcuts remain unchanged.
+
+Hover or highlight an image history item to see a large preview beside the menu. Previews use stored image pixels, fit the available screen, and do not take focus. Text items have no separate preview.
+
 ## 1.3.0 screenshot editor and cropping
 
 After selecting a region with the screenshot hotkey (default `F1`), ClipPin opens an annotation editor with cropping, freehand drawing, translucent highlighting, arrows, rectangles, ellipses, and text. Choose a preset or custom color, adjust stroke/text size, and undo, redo, or clear annotations.

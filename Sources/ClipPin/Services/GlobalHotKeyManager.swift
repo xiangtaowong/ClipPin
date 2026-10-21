@@ -49,6 +49,8 @@ final class GlobalHotKeyManager {
     private var eventHandlerRef: EventHandlerRef?
     private var hotKeyRef: EventHotKeyRef?
     private var registeredHotKeyID: EventHotKeyID?
+    private var registeredShortcut: HotKeyShortcut?
+    private(set) var isSuspendedForMenu = false
 
     init(
         signature: OSType = 0x43425048, // "CBPH"
@@ -69,7 +71,9 @@ final class GlobalHotKeyManager {
 
         let userData = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         let handlerStatus = InstallEventHandler(
-            GetApplicationEventTarget(),
+            // Use the dispatcher for normal global delivery; menu tracking uses
+            // local key events while these registrations are suspended.
+            GetEventDispatcherTarget(),
             hotKeyHandler,
             1,
             &eventType,
@@ -83,11 +87,13 @@ final class GlobalHotKeyManager {
 
         let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: hotKeyIdentifier)
         registeredHotKeyID = hotKeyID
+        registeredShortcut = shortcut
+        if isSuspendedForMenu { return true }
         let hotkeyStatus = RegisterEventHotKey(
             shortcut.keyCode,
             shortcut.modifiers,
             hotKeyID,
-            GetApplicationEventTarget(),
+            GetEventDispatcherTarget(),
             0,
             &hotKeyRef
         )
@@ -98,6 +104,18 @@ final class GlobalHotKeyManager {
         }
 
         return true
+    }
+
+    func setSuspendedForMenu(_ suspended: Bool) {
+        guard suspended != isSuspendedForMenu else { return }
+        isSuspendedForMenu = suspended
+        if suspended {
+            if let hotKeyRef { UnregisterEventHotKey(hotKeyRef); self.hotKeyRef = nil }
+        } else if let shortcut = registeredShortcut, let id = registeredHotKeyID {
+            let status = RegisterEventHotKey(shortcut.keyCode, shortcut.modifiers, id,
+                GetEventDispatcherTarget(), 0, &hotKeyRef)
+            if status != noErr { NSLog("ClipPin failed to resume hotkey: \(status)") }
+        }
     }
 
     deinit {
@@ -124,5 +142,6 @@ final class GlobalHotKeyManager {
         }
 
         registeredHotKeyID = nil
+        registeredShortcut = nil
     }
 }

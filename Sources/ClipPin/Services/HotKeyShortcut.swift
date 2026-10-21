@@ -1,5 +1,6 @@
 import Carbon.HIToolbox
 import Foundation
+import AppKit
 
 struct HotKeyShortcut: Equatable, Codable {
     let keyCode: UInt32
@@ -57,6 +58,17 @@ struct HotKeyShortcut: Equatable, Codable {
         .joined()
 
         return modifierSymbols + keyName
+    }
+
+    func matches(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, UInt32(event.keyCode) == keyCode else { return false }
+        let flags = event.modifierFlags
+        var value: UInt32 = 0
+        if flags.contains(.command) { value |= UInt32(cmdKey) }
+        if flags.contains(.option) { value |= UInt32(optionKey) }
+        if flags.contains(.control) { value |= UInt32(controlKey) }
+        if flags.contains(.shift) { value |= UInt32(shiftKey) }
+        return value == modifiers
     }
 
     private var keyName: String {

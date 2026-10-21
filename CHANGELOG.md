@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1 (2026-10-21)
+
+### Fixed / 修复
+
+- Screenshot and OCR hotkeys work while the clipboard menu is open: menu tracking temporarily routes configured shortcuts locally, dismisses the menu, restores global registrations, then starts capture. / 修复打开历史菜单后截图和识字快捷键失效；先关闭菜单再截图，并恢复全局快捷键。
+
+### Added / 新增
+
+- Hovering or highlighting an image history item shows a large, sharp preview beside the menu, using stored image pixels rather than enlarged thumbnails. It fits the available screen, switches sides near screen edges, and never takes keyboard focus. / 图片历史条目新增旁侧清晰大预览，读取保存的图片像素而非放大小缩略图，自动适应屏幕边界且不抢焦点。
+- Text items keep their existing presentation without a separate preview. / 文字条目保持原有显示，不弹出独立预览。
+
 ## 1.3.0 (2026-10-20)
 
 ### Added / 新增
